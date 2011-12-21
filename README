@@ -1,0 +1,11 @@
+
+i stole this idea from tim viera @ jhu (thanks tim)
+instead of doing his silly line finding algorithm he found on wiki
+i have chosen to write a real ai algorithm for aligning the grid
+on a sudoku board
+
+after/if i get that working, i'll write up a sudoku solver and
+show it off
+
+- travis
+
