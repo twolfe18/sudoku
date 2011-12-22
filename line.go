@@ -11,6 +11,13 @@ import (
 
 /******************************************************************************************/
 
+// TODO not necessary now
+/* type RadialLineVariance struct {
+	Dx, Dy float64	// for midpoint
+	Dtheta float64	// for RadialLine.rotation
+	Dlength float64	// duh
+} */
+
 type Line interface {
 	Draw(image.Image)
 	Angle(Line) float64
@@ -19,13 +26,13 @@ type Line interface {
 
 type PointLine struct {
 	// TODO image.Point is discrete, need continuous version
-	tl, br image.Point	// top left and bottom right
+	tl, br Float64Point	// top left and bottom right
 	radius float64		// std deviation of gaussian off the normal of the line
 }
 
 type RadialLine struct {
-	midpoint image.Point
-	rotation, length float64
+	midpoint Float64Point
+	rotation, length, radius float64
 }
 
 /******************************************************************************************/

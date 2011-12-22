@@ -26,6 +26,52 @@ type EdgeDetector struct {
 	// proposals are chosen with prob: l1_normalize(potentials ^ greedyness).
 	// 0 is uniform choice, infinity is perfectly greedy
 	greedyness float64
+
+	proposal_variance float64
+}
+
+func (ed *EdgeDetector) AlignTo(img image.Image) {
+	// TODO
+	// i can just impelment each of these and see which is fastest (all derivative free)
+	// option 1: draw K transforms, take the best point
+	// option 2: draw K transforms, take the best point and do line search
+	// option 3: draw K transforms, if best point isn't "good enough" then drak K more _smaller_ transforms
+	cur_ed := ed
+	for iter := 0; iter < 10; iter++ {
+		// propose some new edge detector positions
+		s := 0.0
+		proposals := make([]EdgeDetector)
+		potentials := make([]float64)
+		for i := 0; i < cur_ed.num_proposals; i++ {
+			p := cur_ed.Proposal()
+			pp := p.Potential(img)
+			ppp := math.Pow(pp, cur_ed.greedyness)
+			s += ppp
+			proposals = append(proposals, p)
+			potentials = append(potenitals, pp)
+		}
+
+		// make a weighted random choice
+		cutoff := s * rand.Float64()
+		s = 0.0
+		for i, pp := range potentials {
+			s += math.Pow(pp, ed.greedyness)
+			if cutoff < s {
+				cur_ed = proposals[i]
+				fmt.Printf("[EdgeDetector.AlignTo] accepting pot=%.1f\tfrom [ ")
+				for _,v := range potentials { fmt.Printf("%.1f ", v) }
+				fmt.Printf("]\n")
+				break
+			}
+		}
+
+		// test this on images to see how fast this should be decreased
+		cur_ed.proposal_variance *= 0.9
+
+		// print out ED for debugging
+		outf := fmt.Sprintf("/Users/travis/Dropbox/code/sudoku/img/debug.%d.png", iter)
+		SaveImage(cur_ed.Draw(img), outf)
+	}
 }
 
 func NewEdgeDetector() *EdgeDetector {
@@ -34,25 +80,47 @@ func NewEdgeDetector() *EdgeDetector {
 	ed.orientation_sensitivity = 1.0
 	ed.num_proposals = 10
 	ed.greedyness = 1.0
-	// TODO add some lines!
+	ed.proposal_variance = 1.0
+	ed.lines = make([]RadialLine)
+	return &ed
 }
 
-func (ed *EdgeDetector) AlignTo(img image.Image) {
-	// TODO
-	// put hillclimbing in here :)
-// i can just impelment each of these and see which is fastest (all derivative free)
-// option 1: draw K transforms, take the best point
-// option 2: draw K transforms, take the best point and do line search
-// option 3: draw K transforms, if best point isn't "good enough" then drak K more _smaller_ transforms
-	fmt.Printf("[EdgeDetector.Align] need to implement\n")
-	os.Exit(1)
+func (ed EdgeDetector) CloneEdgeDetector() *EdgeDetector {
+	e := new(EdgeDetector)
+	e.default_line_radius = ed.default_line_radius
+	e.orientation_sensitivity = ed.orientation_sensitivity
+	e.num_proposals = ed.num_proposals
+	e.greedyness = ed.greedyness
+	e.proposal_variance = ed.proposal_variance
+	e.lines = ed.lines[:]
+	return &e
 }
 
-func (ed EdgeDetector) Proposal(delta float64) *EdgeDetector {
-	// TODO
-	// return a new ED that has expected diff of delta
-	fmt.Printf("[EdgeDetector.Proposal] need to implement\n")
-	os.Exit(1)
+func (ed EdgeDetector) Proposal(bounds Float64Rectangle) *EdgeDetector {
+
+	new_ed := ed.CloseEdgeDetector()
+
+	for i, l := range ed.lines {
+
+		new_midpoint := l.midpoint
+
+		new_midpoint.X += (rand.Float64() * 2.0 - 1.0) * ed.proposal_variance
+		new_midpoint.X = math.Fmax(new_midpoint.X, bounds.Min.X)
+		new_midpoint.X = math.Fmin(new_midpoint.X, bounds.Max.X)
+
+		new_midpoint.Y += (rand.Float64() * 2.0 - 1.0) * ed.proposal_variance
+		new_midpoint.Y = math.Fmax(new_midpoint.Y, bounds.Min.Y)
+		new_midpoint.Y = math.Fmin(new_midpoint.Y, bounds.Max.Y)
+
+		new_rotation = l.rotation + (rand.Float64() * 2.0 - 1.0) * ed.proposal_variance
+
+		// TODO make sure that this is inside bounds
+		new_length = l.length
+
+		new_radius = l.radius
+
+		new_ed.lines[i] = RadialLine{new_midpoint, new_rotation, new_length, new_radius}
+	}
 }
 
 func (ed EdgeDetector) Draw(img image.Image) image.Image {

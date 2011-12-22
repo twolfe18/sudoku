@@ -8,6 +8,14 @@ import (
 	"fmt"
 )
 
+type Float64Point struct {
+	X, Y float64
+}
+
+type Float64Rectangle struct {
+	Min, Max Float64Point
+}
+
 func max(a, b int) int {
 	if a > b { return a }
 	return b
