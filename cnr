@@ -2,5 +2,5 @@
 # cnr stands for "compile and run"
 clear
 rm *.6 *.out
-6g *.go && 6l edge_detectors.6 && time ./6.out
+6g *.go && 6l edge_detctors.6 && time ./6.out
 

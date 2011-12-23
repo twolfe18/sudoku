@@ -1,11 +1,12 @@
 
-package sudoku
+package main
 
 import (
 	"os"
 	"image"
 	"image/png"
 	"fmt"
+	"rand"
 )
 
 type Float64Point struct {
@@ -16,18 +17,43 @@ type Float64Rectangle struct {
 	Min, Max Float64Point
 }
 
+func (r Float64Rectangle) Dx() (d float64) {
+	return r.Max.X - r.Min.X
+}
+
+func (r Float64Rectangle) Dy() (d float64) {
+	return r.Max.Y - r.Min.Y
+}
+
+func NewFloat64Rectangle(r image.Rectangle) (ret Float64Rectangle) {
+	ret.Min.X = float64(r.Min.X)
+	ret.Min.Y = float64(r.Min.Y)
+	ret.Max.X = float64(r.Max.X)
+	ret.Max.Y = float64(r.Max.Y)
+	return ret
+}
+
 func max(a, b int) int {
 	if a > b { return a }
 	return b
 }
 
-func RandomPointBetween(lo, hi image.Point) image.Point {
-	x := int(float64(hi.X) - rand.Float64() * float64(hi.X - lo.X))
-	y := int(float64(hi.Y) - rand.Float64() * float64(hi.Y - lo.Y))
-	return image.Point{x, y}
+func Midpoint(a, b Float64Point) (mid Float64Point) {
+	mid = a
+	mid.X += b.X
+	mid.X /= 2.0
+	mid.Y += b.Y
+	mid.Y /= 2.0
+	return mid
 }
 
-func (img image.Image) DarknessAt(x, y int) float64 {
+func RandomPointBetween(lo, hi Float64Point) Float64Point {
+	x := float64(hi.X) - rand.Float64() * float64(hi.X - lo.X)
+	y := float64(hi.Y) - rand.Float64() * float64(hi.Y - lo.Y)
+	return Float64Point{x, y}
+}
+
+func DarknessAt(img image.Image, x, y int) float64 {
 	r, g, b, a := img.At(x, y).RGBA()
 	lum := float64(a) * (0.21 * float64(r) + 0.71 * float64(g) + 0.07 * float64(b))
 	return 255.0 - lum
