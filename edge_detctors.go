@@ -6,10 +6,15 @@ import (
 	"math"
 	"image"
 	"rand"
+	"os"
+)
+
+const (
+	SudokuGridDimension = 9	// side of board (in squares, not lines)
 )
 
 type EdgeDetector struct {
-	lines []RadialLine	// TODO make RadialLine (maybe)
+	lines []Line
 
 	// potential += exp(-sq_dist(point,pixel) / radius)
 	default_line_radius float64
@@ -28,14 +33,13 @@ type EdgeDetector struct {
 }
 
 func (ed EdgeDetector) AlignTo(img image.Image) {
-	// TODO
-	// i can just impelment each of these and see which is fastest (all derivative free)
+	// TODO i can just impelment each of these and see which is fastest (all derivative free)
 	// option 1: draw K transforms, take the best point
 	// option 2: draw K transforms, take the best point and do line search
 	// option 3: draw K transforms, if best point isn't "good enough" then drak K more _smaller_ transforms
 	bounds := NewFloat64Rectangle(img.Bounds())
 	cur_ed := ed
-	for iter := 0; iter < 10; iter++ {
+	for iter := 0; iter < 2; iter++ {
 		// propose some new edge detector positions
 		s := 0.0
 		proposals := make([]EdgeDetector, ed.num_proposals)
@@ -72,14 +76,29 @@ func (ed EdgeDetector) AlignTo(img image.Image) {
 	}
 }
 
-func NewEdgeDetector() EdgeDetector {
+func NewEdgeDetector(b Float64Rectangle) EdgeDetector {
 	ed := new(EdgeDetector)
 	ed.default_line_radius = 10.0
 	ed.orientation_sensitivity = 1.0
 	ed.num_proposals = 10
 	ed.greedyness = 1.0
 	ed.proposal_variance = 1.0
-	ed.lines = make([]RadialLine, ed.num_proposals)
+
+	// place some lines
+	ed.lines = make([]Line, ed.num_proposals)
+	num_lines := SudokuGridDimension + 1
+	dx := b.Dx() / float64(num_lines + 1)
+	dy := b.Dx() / float64(num_lines + 1)
+	x0 := b.Min.X + dx / 2.0; xmax := b.Max.X-x0; x := x0
+	y0 := b.Min.Y + dy / 2.0; ymax := b.Max.Y-y0; y := y0
+	for i := 0; i < num_lines; i++ {
+		v := Line{Float64Point{x, y0}, Float64Point{x, ymax}, ed.default_line_radius}	// vertical
+		h := Line{Float64Point{x0, y}, Float64Point{xmax, y}, ed.default_line_radius}	// horizontal
+		ed.lines = append(ed.lines, v)
+		ed.lines = append(ed.lines, h)
+		x += dx; y += dy
+	}
+
 	return *ed
 }
 
@@ -100,26 +119,51 @@ func (ed EdgeDetector) Proposal(bounds Float64Rectangle) EdgeDetector {
 
 	for i, l := range ed.lines {
 
-		new_midpoint := l.midpoint
+		nl := *new(Line)	// new line
+		nl.radius = l.radius
 
-		new_midpoint.X += (rand.Float64() * 2.0 - 1.0) * ed.proposal_variance
-		new_midpoint.X = math.Fmax(new_midpoint.X, bounds.Min.X)
-		new_midpoint.X = math.Fmin(new_midpoint.X, bounds.Max.X)
+		// first rotate the line
+		theta := rand.Float64() * ed.proposal_variance			// how much to rotate by
+		// solve system of equations:
+		// 1) cos(theta) = v.X * x + v.Y * y
+		// 2) length = x^2 + y^2
+		v := PointMinus(l.right, l.left)
+		length := v.L2Norm()
+		// results in quadratic (y = (-b +/- sqrt(b^2 - 4ac)) / (2a):
+		a := math.Pow(math.Cos(theta), 2.0) - v.X * v.X
+		b := -2.0 * v.Y
+		c := v.Y + v.X * v.X
+		if math.Fabs(b * b - 4.0 * a * c) > 1e-8 {
+			fmt.Printf("[EdgeDetector.Proposal] math problem!\n")
+			os.Exit(1)
+		}
+		y := -b / (2.0 * a)
+		x := math.Sqrt(length * length - y * y)
 
-		new_midpoint.Y += (rand.Float64() * 2.0 - 1.0) * ed.proposal_variance
-		new_midpoint.Y = math.Fmax(new_midpoint.Y, bounds.Min.Y)
-		new_midpoint.Y = math.Fmin(new_midpoint.Y, bounds.Max.Y)
+		nl.left = Float64Point{l.left.X-x, l.left.Y-y}
+		nl.right = Float64Point{l.right.X-x, l.right.Y-y}
 
-		new_rotation := l.rotation + (rand.Float64() * 2.0 - 1.0) * ed.proposal_variance
+		// now apply left-right and up-down shifts
+		dx := (rand.Float64() * 2.0 - 1.0) * ed.proposal_variance	// left-right movement
+		dy := (rand.Float64() * 2.0 - 1.0) * ed.proposal_variance	// up-down movement
+		nl.left.X += dx
+		nl.left.Y += dy
+		nl.right.X += dx
+		nl.right.Y += dy
 
-		// TODO make sure that this is inside bounds
-		new_length := l.length
+		// now make sure it's in the bounds
+		nl.left.X = math.Fmax(bounds.Min.X, nl.left.X)
+		nl.left.X = math.Fmin(bounds.Max.X, nl.left.X)
+		nl.left.Y = math.Fmax(bounds.Min.Y, nl.left.Y)
+		nl.left.Y = math.Fmin(bounds.Max.Y, nl.left.Y)
 
-		new_radius := l.radius
+		nl.right.X = math.Fmax(bounds.Min.X, nl.right.X)
+		nl.right.X = math.Fmin(bounds.Max.X, nl.right.X)
+		nl.right.Y = math.Fmax(bounds.Min.Y, nl.right.Y)
+		nl.right.Y = math.Fmin(bounds.Max.Y, nl.right.Y)
 
-		new_ed.lines[i] = RadialLine{new_midpoint, new_rotation, new_length, new_radius}
+		new_ed.lines[i] = nl
 	}
-	fmt.Printf("[EdgeDetector.Proposal] TODO make sure that new proposal is bounded!\n")
 	return new_ed
 }
 
@@ -187,7 +231,7 @@ func (ed EdgeDetector) Potential(img image.Image) (p float64) {
 func main() {
 	base := "/Users/travis/Dropbox/code/sudoku/img/"
 	img := OpenImage(base + "clean_256_256.png")
-	ed := NewEdgeDetector()
+	ed := NewEdgeDetector(NewFloat64Rectangle(img.Bounds()))
 	ed.AlignTo(img)
 	SaveImage(ed.Draw(img), base + "output.png")
 }
@@ -210,8 +254,7 @@ func test_draw() {
 		lo := RandomPointBetween(b.Min, mid)
 		hi := RandomPointBetween(mid, b.Max)
 		radius := rand.Float64() * 5.0
-		line := Point2Radial(PointLine{lo, hi, radius})
-		ed.lines = append(ed.lines, line)
+		ed.lines = append(ed.lines, Line{lo, hi, radius})
 	}
 	m_col_img := ed.Draw(m_gray_img)
 	SaveImage(m_col_img, outf)

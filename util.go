@@ -7,10 +7,31 @@ import (
 	"image/png"
 	"fmt"
 	"rand"
+	"math"
 )
 
 type Float64Point struct {
 	X, Y float64
+}
+
+func (v Float64Point) L2Norm() float64 {
+	return math.Sqrt(v.X * v.X + v.Y * v.Y)
+}
+
+func PointMinus(a, b Float64Point) (r Float64Point) {
+	r.X = a.X - b.X
+	r.Y = a.Y - b.Y
+	return r
+}
+
+func PointPlus(a, b Float64Point) (r Float64Point) {
+	r.X = a.X + b.X
+	r.Y = a.Y + b.Y
+	return r
+}
+
+func DotProduct(a, b Float64Point) float64 {
+	return a.X * b.X + a.Y * b.Y
 }
 
 type Float64Rectangle struct {
