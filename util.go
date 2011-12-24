@@ -14,6 +14,24 @@ type Float64Point struct {
 	X, Y float64
 }
 
+func (p Float64Point) String() string {
+	return fmt.Sprintf("(%.1f, %.1f)", p.X, p.Y)
+}
+
+func (p *Float64Point) Scale(s float64) {
+	p.X *= s
+	p.Y *= s
+}
+
+func (v Float64Point) Rotate(theta float64) Float64Point {
+	// http://en.wikipedia.org/wiki/Rotation_(mathematics)#Matrix_algebra
+	st := math.Sin(theta)
+	ct := math.Cos(theta)
+	xp := v.X * ct - v.Y * st
+	yp := v.X * st + v.Y * ct
+	return Float64Point{xp, yp}
+}
+
 func (v Float64Point) L2Norm() float64 {
 	return math.Sqrt(v.X * v.X + v.Y * v.Y)
 }
@@ -68,6 +86,29 @@ func Midpoint(a, b Float64Point) (mid Float64Point) {
 	return mid
 }
 
+func WeightedChoice(weights []float64) int {
+	s := 0.0
+	for _,v := range weights {
+		if v < 0.0 || v == math.NaN() || math.IsInf(v, 1) || math.IsInf(v, -1) {
+			fmt.Printf("[WeightedChoice] illegal weight: %.2f\n", v)
+			os.Exit(1)
+		}
+		s += v
+	}
+	if s == 0.0 {
+		fmt.Printf("[WeightedChoice] all weights are 0!\n")
+		os.Exit(1)
+	}
+	cutoff := rand.Float64() * s
+	s = 0.0
+	for i,v := range weights {
+		if s >= cutoff { return i }
+		s += v
+	}
+	fmt.Printf("[wtf] s = %.2f, cutoff = %.2f, weights = %s\n", s, cutoff, weights)
+	return -1
+}
+
 func RandomPointBetween(lo, hi Float64Point) Float64Point {
 	x := float64(hi.X) - rand.Float64() * float64(hi.X - lo.X)
 	y := float64(hi.Y) - rand.Float64() * float64(hi.Y - lo.Y)
@@ -75,9 +116,11 @@ func RandomPointBetween(lo, hi Float64Point) Float64Point {
 }
 
 func DarknessAt(img image.Image, x, y int) float64 {
-	r, g, b, a := img.At(x, y).RGBA()
-	lum := float64(a) * (0.21 * float64(r) + 0.71 * float64(g) + 0.07 * float64(b))
-	return 255.0 - lum
+	r, g, b, _ := img.At(x, y).RGBA()
+	lum := 0.21 * float64(r) + 0.71 * float64(g) + 0.07 * float64(b)
+	// TODO make this more flexible
+	//return 255.0 - lum	// 8 bit
+	return 65535.0 - lum	// 16 bit
 }
 
 // converts an image to a mutable grayscale image
