@@ -25,6 +25,31 @@ type Line struct {
 
 /******************************************************************************************/
 
+func ShiftedMidpoint(l Line, towards Float64Point, amount float64) {
+	if amount <= 0.0 || amount >= 1.0 {
+		fmt.Printf("[ShiftLine] illegal amount: %.2f\n", amount)
+		os.Exit(1)
+	}
+	mp := MidPoint(l).Scale(amount)
+	towards.Scale(1.0 - amount)
+	return PointPlus(mp, towards)
+}
+
+func (l Line) ScaleLength(scale float64) {
+	m := Midpoint(l)
+	v := PointMinus(l.right, m)
+	v.Scale(scale)
+	l.right = PointPlus(m, v)
+	l.left = PointMinus(m, v)
+}
+
+func (l Line) ProjectInto(bounds Float64Rectangle) {
+	l.left.ProjectInto(bounds)
+	l.right.ProjectInto(bounds)
+}
+
+/******************************************************************************************/
+
 func (l Line) String() string {
 	return fmt.Sprintf("[%s -> %s]", l.left.String(), l.right.String())
 }

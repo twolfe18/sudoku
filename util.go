@@ -10,6 +10,8 @@ import (
 	"math"
 )
 
+// TODO refactor all intstances of Float64Point in the file to two Float64Points
+
 type Float64Point struct {
 	X, Y float64
 }
@@ -21,6 +23,13 @@ func (p Float64Point) String() string {
 func (p *Float64Point) Scale(s float64) {
 	p.X *= s
 	p.Y *= s
+}
+
+func (p Float64Point) ProjectInto(bounds Float64Rectangle) {
+	p.X = math.Fmax(bounds.Min.X, p.X)
+	p.X = math.Fmin(bounds.Max.X, p.X)
+	p.Y = math.Fmax(bounds.Min.Y, p.Y)
+	p.Y = math.Fmin(bounds.Max.Y, p.Y)
 }
 
 func (v Float64Point) Rotate(theta float64) Float64Point {
@@ -119,8 +128,8 @@ func DarknessAt(img image.Image, x, y int) float64 {
 	r, g, b, _ := img.At(x, y).RGBA()
 	lum := 0.21 * float64(r) + 0.71 * float64(g) + 0.07 * float64(b)
 	// TODO make this more flexible
-	//return 255.0 - lum	// 8 bit
-	return 65535.0 - lum	// 16 bit
+	//return (255.0 - lum) / 255.0		// 8 bit
+	return (65535.0 - lum) / 65535.0	// 16 bit
 }
 
 // converts an image to a mutable grayscale image

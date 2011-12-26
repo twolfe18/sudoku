@@ -68,7 +68,7 @@ func (ed EdgeDetector) AlignTo(img image.Image) {
 		fmt.Printf("]\n")
 
 		// test this on images to see how fast this should be decreased
-		cur_ed.proposal_variance *= 0.9
+		//cur_ed.proposal_variance *= 0.9
 
 		// print out ED for debugging
 		outf := fmt.Sprintf("/Users/travis/Dropbox/code/sudoku/img/debug.%d.png", iter)
@@ -78,15 +78,15 @@ func (ed EdgeDetector) AlignTo(img image.Image) {
 
 func NewEdgeDetector(b Float64Rectangle) EdgeDetector {
 	ed := new(EdgeDetector)
-	ed.default_line_radius = 10.0
+	ed.default_line_radius = 1.0
 	ed.orientation_sensitivity = 3.0
-	ed.num_proposals = 80
+	ed.num_proposals = 75
 	ed.greedyness = 2.5
-	ed.proposal_variance = 1.0	// in degrees
+	ed.proposal_variance = 4.0	// in degrees
 
 	// place some lines
-	padding := 2.0
-	num_lines := SudokuGridDimension + 1
+	padding := 60.0	//2.0
+	num_lines := 4	//SudokuGridDimension + 1
 	dx := (b.Dx() - 2.0*padding) / float64(num_lines - 1)
 	dy := (b.Dx() - 2.0*padding) / float64(num_lines - 1)
 	x0 := b.Min.X + padding; xmax := b.Max.X - padding; x := x0
@@ -103,7 +103,7 @@ func NewEdgeDetector(b Float64Rectangle) EdgeDetector {
 	//fmt.Printf("[ned] ed.lines = %s\n", ed.lines)
 
 	// random perturbation of "perfect"
-	crappyness := 2.0
+	crappyness := 6.0
 	ed.proposal_variance *= crappyness
 	n := ed.Proposal(b)
 	n.proposal_variance /= crappyness
@@ -148,6 +148,8 @@ func (ed EdgeDetector) Proposal(bounds Float64Rectangle) EdgeDetector {
 		nl.right = PointPlus(Midpoint(l.left, l.right), z) 
 
 		// now apply left-right and up-down shifts
+		// TODO the indepented scale for dx dy shifts should be higher to allow for when
+		// the original distance between lines is too great or small
 		dx := mean_dx + independent_scale * (rand.Float64() * 2.0 - 1.0) * ed.proposal_variance	// left-right movement
 		dy := mean_dy + independent_scale * (rand.Float64() * 2.0 - 1.0) * ed.proposal_variance	// up-down movement
 		nl.left.X += dx
@@ -156,18 +158,26 @@ func (ed EdgeDetector) Proposal(bounds Float64Rectangle) EdgeDetector {
 		nl.right.Y += dy
 
 		// now make sure it's in the bounds
-		nl.left.X = math.Fmax(bounds.Min.X, nl.left.X)
-		nl.left.X = math.Fmin(bounds.Max.X, nl.left.X)
-		nl.left.Y = math.Fmax(bounds.Min.Y, nl.left.Y)
-		nl.left.Y = math.Fmin(bounds.Max.Y, nl.left.Y)
-
-		nl.right.X = math.Fmax(bounds.Min.X, nl.right.X)
-		nl.right.X = math.Fmin(bounds.Max.X, nl.right.X)
-		nl.right.Y = math.Fmax(bounds.Min.Y, nl.right.Y)
-		nl.right.Y = math.Fmin(bounds.Max.Y, nl.right.Y)
-
+		nl.ProjectInto(bounds)
 		new_ed.lines[i] = nl
 	}
+
+	// scalings (shrinks and stretches) in x and y directions
+	// TODO write variance struct that includes L/R, U/D shift amounts in (0,1)
+	stretch := (rand.Float64() * 2.0 - 1.0) * ed.proposal_variance
+	center := Float64Point{0.0, 0.0}	// find center of all lines, stretch to/from this point
+	for _,l := range new_ed.lines {
+		center := PointPlus(center, Midpoint(l))
+	}
+	center.Scale(1.0 / len(new_ed.lines))
+	amount := 0.0	// TODO
+	for _,l := range new_ed.lines {
+		nmp := ShiftedMidpoint(l, center, amount)
+		half := PointMinus(l.right, Midpoint(l))
+		l.right = PointPlus(half, nmp)
+		l.left = PointMinus(nmp, half)
+	}
+
 	return new_ed
 }
 
@@ -201,16 +211,16 @@ func (ed EdgeDetector) Potential(img image.Image) (p float64) {
 		// probably not...
 
 	// activation for each line and pixel
+	var delta, dist float64
 	add := 0.0
 	b := img.Bounds()
 	for x := b.Min.X; x < b.Max.X; x++ {
 		for y := b.Min.Y; y < b.Max.Y; y++ {
 			for _, line := range ed.lines {
 				// TODO may need to play with this formula
-				d := DarknessAt(img, x, y) * line.SquaredDistance(float64(x), float64(y)) 
-				//fmt.Printf("[poten] d = %.2f\tsq_d = %.2f\tdarkness = %.2f \t line.radius = %.2f\n", d, line.SquaredDistance(float64(x), float64(y)), DarknessAt(img, x, y), line.radius)
-				p += math.Exp(-1.0 * d / line.radius)
-				add += math.Exp(-1.0 * d / line.radius)
+				dist = line.SquaredDistance(float64(x), float64(y)) 
+				delta = DarknessAt(img, x, y) * math.Exp(-dist / line.radius)
+				p += delta; add += delta
 				if math.IsInf(add, 1) {
 					fmt.Printf("[Potential] hit inf!\n")
 					os.Exit(1)
@@ -218,17 +228,22 @@ func (ed EdgeDetector) Potential(img image.Image) (p float64) {
 			}
 		}
 	}
+	p /= float64(len(ed.lines)); add /= float64(len(ed.lines))
 
 	// orientation of the lines
 	remove := 0.0
+	num_pairs := 0	// man up: N * (N-1) / 2
 	N := len(ed.lines)
 	for i := 1; i < N; i++ {
 		for j := 0; j < i; j++ {
-			a := ed.lines[i].Angle(ed.lines[j])
-			p -= math.Exp(-1.0 * math.Fmod(a, 90.0)) * ed.orientation_sensitivity
-			remove += math.Exp(-1.0 * math.Fmod(a, 90.0)) * ed.orientation_sensitivity
+			num_pairs += 1
+			dist = ed.lines[i].Angle(ed.lines[j])
+			delta = math.Exp(-math.Fmod(dist, 90.0)) * ed.orientation_sensitivity
+			/*p -= delta;*/ remove += delta
 		}
 	}
+	remove /= float64(num_pairs)
+	p -= remove
 
 	fmt.Printf("[EdgeDetector.Potential] potential = %.2f\t(+%.2f, -%.2f)\n", p, add, remove)
 	return p
