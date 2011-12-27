@@ -3,6 +3,8 @@ package main
 
 import (
 	"fmt"
+	"image"
+	"math"
 )
 
 const (	// TODO find a consistent way to write this with stuff in edge_detectors
@@ -12,7 +14,7 @@ const (	// TODO find a consistent way to write this with stuff in edge_detectors
 	MAX_ITER = 10
 )
 
-func later() {
+/*func later() {
 
 	// TODO have lines *mask* out the dark parts that they are covering
 
@@ -23,7 +25,7 @@ func later() {
 
 	// initialize a whole bunch of lines randomly
 	bounds := NewFloat64Rectangle(img.Bounds())
-	lines := [NUM_LINES]Line
+	lines := nil//[NUM_LINES]Line
 	for i,_ := range lines {
 		lines[i] = RandomPointBetween(bounds.Min(), bounds.Max())
 	}
@@ -48,27 +50,41 @@ func later() {
 		}
 	}
 
-}
+} */
 
 func main() {
 	base := "/Users/travis/Dropbox/code/sudoku/img/"
 	img := OpenImage(base + "clean_256_256.png")
-
-	// randomly place a line on the board
-	b := NewFloat64Point(img.Bounds())
-	left := RandomPointBetween(b.Min, b.Max)
-	right := RandomPointBetween(b.Min, b.Max)
-	line := Line{left, right, 1.0}
+	SaveImage(img, "after_init.png")
 
 	p := DefaultParams()
+	lines := make([]Line, 0)
+	for len(lines) < 20 {
 
-	// see where it goes to
-	for iter := 0; iter < 10; iter++ {
-		line = LocalOptimizePotential(line, img, p)
-		// TODO
-		// copy
-		// draw
-		// write
+		// randomly place a line on the board
+		b := NewFloat64Rectangle(img.Bounds())
+		left := RandomPointBetween(b.Min, b.Max)
+		right := RandomPointBetween(b.Min, b.Max)
+		i := len(lines)
+		lines := append(lines, Line{left, right, 1.0})
+
+		// TODO mask off current lines
+
+		// see where it goes to
+		for iter := 0; iter < 10; iter++ {
+			newline := LocalOptimizePotential(lines[i], img, p)
+			if lines[i].Equals(newline) {
+				fmt.Printf("[main] converged at iter %d\n", iter)
+				break
+			} else {
+				lines[i] = newline
+				cpy := CopyImage(img)
+				for _,l := range lines {
+					l.Draw(cpy, image.RGBAColor{255, 0, 0, 255})
+				}
+				SaveImage(cpy, fmt.Sprintf("%sdebug.%d.%d.png", base, i, iter))
+			}
+		}
 	}
 }
 
@@ -82,10 +98,10 @@ func DefaultParams() (p Params) {
 	p.lambda_dtheta = 1.0
 	p.lambda_dx = 1.0
 	p.lambda_dy = 1.0
-	p.delta_dtheta = 0.1
-	p.delta_dx = 0.1
-	p.delta_dy = 0.1
-	p.max_dtheta = 10.0
+	p.delta_dtheta = 1
+	p.delta_dx = 1.0
+	p.delta_dy = 1.0
+	p.max_dtheta = 15.0
 	p.max_dx = 10.0
 	p.max_dy = 10.0
 	return p
@@ -95,15 +111,18 @@ func LocalOptimizePotential(line Line, img image.Image, p Params) (bestline Line
 	// TODO do some kind of branch and bound
 	var newline Line
 	bestpot := math.Inf(-1)
+	fmt.Printf("[LocalOptimizePotential] about to go through %d *s: ", int(2.0 * p.max_dtheta / p.delta_dtheta))
+	best_theta := 0.0
 	for dtheta := -p.max_dtheta; dtheta <= p.max_dtheta; dtheta += p.delta_dtheta {
 		fmt.Printf("*")
 		for dx := -p.max_dx; dx <= p.max_dx; dx += p.delta_dx {
-			for dy := -p.max_dy; dy <= p.may_dy; dy += p.delta_dy {
+			for dy := -p.max_dy; dy <= p.max_dy; dy += p.delta_dy {
 				newline = line
 				newline.Rotate(dtheta)
 				newline.Shift(dx, dy)
-				p := LinePotential(newline, img)
+				p := LinePotential(newline, img) - p.lambda_dtheta * dtheta - p.lambda_dx * dx - p.lambda_dy * dy
 				if p > bestpot {
+					best_theta = dtheta
 					bestpot = p
 					bestline = newline
 				}
@@ -111,20 +130,18 @@ func LocalOptimizePotential(line Line, img image.Image, p Params) (bestline Line
 		}
 	}
 	fmt.Printf("\n")
+	fmt.Printf("[LocalOptimizePotential] dtheta = %.2f opt %s \t to \t %s\n", best_theta, line, bestline)
 	return bestline
 }
 
 func LinePotential(line Line, img image.Image) (pot float64) {
-	ch := make(chan WeightedPoint)
-	l.WeightedIterator(ch)
-	for wp := <-ch {
+	for _,wp := range line.WeightedIterator() {
 		darkness := DarknessAt(img, wp.P.X, wp.P.Y)
-		if p.W < 0.0 || p.W > 1.0 {
-			panic(fmt.Sprintf("[LinePotential] weight must be in [0,1]: %.2f", p.W))
+		if wp.W < 0.0 || wp.W > 1.0 {
+			panic(fmt.Sprintf("[LinePotential] weight must be in [0,1]: %.2f", wp.W))
 		}
-		pot += darkness * math.Exp(-1.0 * p.W * p.W)
+		pot += darkness * wp.W
 	}
-	close(ch)
 	return pot
 }
 

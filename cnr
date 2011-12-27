@@ -1,6 +1,9 @@
 #!/bin/bash
 # cnr stands for "compile and run"
+
+files="SimpleLineOpt.go Line.go Util.go Float64Point.go Float64Rectangle.go"	# EdgeDetector.go
+exe="SimpleLineOpt.6"
 clear
 rm *.6 *.out
-6g *.go && 6l edge_detctors.6 && time ./6.out
+6g $files && 6l $exe && time ./6.out
 

@@ -5,6 +5,7 @@ import (
 	"os"
 	"image"
 	"image/png"
+	"image/draw"
 	"fmt"
 	"rand"
 	"math"
@@ -46,19 +47,16 @@ func DarknessAt(img image.Image, x, y int) float64 {
 	return (65535.0 - lum) / 65535.0	// 16 bit
 }
 
-// converts an image to a mutable grayscale image
-func Convert2Grayscale(input image.Image) *image.Gray16 {
-	width := input.Bounds().Dx()
-	height := input.Bounds().Dy()
-	output := image.NewGray16(width, height)
-	for x := 0; x < width; x++ {
-		for y := 0; y < height; y++ {
-			r, g, b, _ := input.At(x, y).RGBA()
-			lum := uint16(0.21 * float64(r) + 0.71 * float64(g) + 0.07 * float64(b))
-			output.Set(x, y, image.Gray16Color{lum})
+// makes a mutable copy
+func CopyImage(img image.Image) (cpy draw.Image) {
+	b := img.Bounds()
+	cpy = image.NewRGBA(b.Dx(), b.Dy())
+	for x := b.Min.X; x < b.Max.X; x++ {
+		for y := b.Min.Y; y < b.Max.Y; y++ {
+			cpy.Set(x, y, img.At(x, y))
 		}
 	}
-	return output
+	return cpy
 }
 
 func SaveImage(img image.Image, outf string) {

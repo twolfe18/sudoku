@@ -1,14 +1,7 @@
 
 package main
 
-import (
-	"os"
-	"image"
-	"image/png"
-	"fmt"
-	"rand"
-	"math"
-)
+import "image"
 
 type Float64Rectangle struct {
 	Min, Max Float64Point
@@ -23,10 +16,8 @@ func (r Float64Rectangle) Dy() (d float64) {
 }
 
 func NewFloat64Rectangle(r image.Rectangle) (ret Float64Rectangle) {
-	ret.Min.X = float64(r.Min.X)
-	ret.Min.Y = float64(r.Min.Y)
-	ret.Max.X = float64(r.Max.X)
-	ret.Max.Y = float64(r.Max.Y)
+	ret.Min = NewFloat64Point(r.Min)
+	ret.Max = NewFloat64Point(r.Max)
 	return ret
 }
 
