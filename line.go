@@ -11,13 +11,6 @@ import (
 
 /******************************************************************************************/
 
-// TODO not necessary now
-/* type RadialLineVariance struct {
-	Dx, Dy float64	// for midpoint
-	Dtheta float64	// for RadialLine.rotation
-	Dlength float64	// duh
-} */
-
 type Line struct {
 	left, right Float64Point
 	radius float64		// std deviation of gaussian off the normal of the line
@@ -25,14 +18,10 @@ type Line struct {
 
 /******************************************************************************************/
 
-func ShiftedMidpoint(l Line, towards Float64Point, amount float64) {
-	if amount <= 0.0 || amount >= 1.0 {
-		fmt.Printf("[ShiftLine] illegal amount: %.2f\n", amount)
-		os.Exit(1)
-	}
-	mp := MidPoint(l).Scale(amount)
-	towards.Scale(1.0 - amount)
-	return PointPlus(mp, towards)
+func (l Line) Midpoint() (mid Float64Point) {
+	v := PointMinus(l.right, l.left)
+	v.Scale(0.5)
+	return PointPlus(l.left, v)
 }
 
 func (l Line) ScaleLength(scale float64) {
@@ -43,10 +32,44 @@ func (l Line) ScaleLength(scale float64) {
 	l.left = PointMinus(m, v)
 }
 
+func (l Line) Shift(dx, dy float64) {
+	l.left.Shift(dx, dy)
+	l.right.Shift(dx, dy)
+}
+
 func (l Line) ProjectInto(bounds Float64Rectangle) {
 	l.left.ProjectInto(bounds)
 	l.right.ProjectInto(bounds)
 }
+
+// you might think to have a function that returns a chan image.Point
+// but i think this is cleaner because this way it is clear that the
+// channel must be created and closed in the same place (as opposed to
+// created in this function and closed by the caller)
+func (l Line) Iterator(c chan image.Point) {
+	cur := l.left
+	iter := int(math.Fmax(math.Fabs(v.X), math.Fabs(v.Y)))
+	if iter == 0 {
+		c <- image.Point{int(l.left.X), int(l.right.Y)}
+		return
+	}
+	dx := v.X / float64(iter); dy := v.Y / float64(iter)
+	for i := 0; i<iter; i++ {
+		c <- image.Point{int(cur.X), int(cur.Y)}
+	}
+}
+
+// this allows for stuff like anti-aliased drawing
+type WeightedPoint struct {
+	P image.Point
+	W float64
+}
+
+func (l Line) WeightedIterator(c chan WeightedPoint) {
+	// TODO
+	panic("[WeightedIterator] not implemented yet!")
+}
+
 
 /******************************************************************************************/
 
@@ -54,17 +77,12 @@ func (l Line) String() string {
 	return fmt.Sprintf("[%s -> %s]", l.left.String(), l.right.String())
 }
 
-func (l Line) Draw(img draw.Image) {
-	hl_color := image.RGBAColor{255, 0, 0, 255}
-	v := PointMinus(l.right, l.left)
-	cur := l.left
-	iter := int(math.Fmax(math.Fabs(v.X), math.Fabs(v.Y)))
-	if iter == 0 { img.Set(int(l.left.X), int(l.right.Y), hl_color) }
-	dx := v.X / float64(iter); dy := v.Y / float64(iter)
-	for i := 0; i<iter; i++ {
-		img.Set(int(cur.X), int(cur.Y), hl_color)
-		cur.X += dx; cur.Y += dy
-	}
+
+func (l Line) Draw(img draw.Image, c image.Color) {
+	ch := make(chan image.Point)
+	l.LineIter(ch)
+	for p := <-ch { img.Set(p.X, p.Y, c) }
+	close(ch)
 }
 
 func (l Line) Angle(o Line) float64 {

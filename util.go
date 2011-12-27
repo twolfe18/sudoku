@@ -10,89 +10,9 @@ import (
 	"math"
 )
 
-// TODO refactor all intstances of Float64Point in the file to two Float64Points
-
-type Float64Point struct {
-	X, Y float64
-}
-
-func (p Float64Point) String() string {
-	return fmt.Sprintf("(%.1f, %.1f)", p.X, p.Y)
-}
-
-func (p *Float64Point) Scale(s float64) {
-	p.X *= s
-	p.Y *= s
-}
-
-func (p Float64Point) ProjectInto(bounds Float64Rectangle) {
-	p.X = math.Fmax(bounds.Min.X, p.X)
-	p.X = math.Fmin(bounds.Max.X, p.X)
-	p.Y = math.Fmax(bounds.Min.Y, p.Y)
-	p.Y = math.Fmin(bounds.Max.Y, p.Y)
-}
-
-func (v Float64Point) Rotate(theta float64) Float64Point {
-	// http://en.wikipedia.org/wiki/Rotation_(mathematics)#Matrix_algebra
-	st := math.Sin(theta)
-	ct := math.Cos(theta)
-	xp := v.X * ct - v.Y * st
-	yp := v.X * st + v.Y * ct
-	return Float64Point{xp, yp}
-}
-
-func (v Float64Point) L2Norm() float64 {
-	return math.Sqrt(v.X * v.X + v.Y * v.Y)
-}
-
-func PointMinus(a, b Float64Point) (r Float64Point) {
-	r.X = a.X - b.X
-	r.Y = a.Y - b.Y
-	return r
-}
-
-func PointPlus(a, b Float64Point) (r Float64Point) {
-	r.X = a.X + b.X
-	r.Y = a.Y + b.Y
-	return r
-}
-
-func DotProduct(a, b Float64Point) float64 {
-	return a.X * b.X + a.Y * b.Y
-}
-
-type Float64Rectangle struct {
-	Min, Max Float64Point
-}
-
-func (r Float64Rectangle) Dx() (d float64) {
-	return r.Max.X - r.Min.X
-}
-
-func (r Float64Rectangle) Dy() (d float64) {
-	return r.Max.Y - r.Min.Y
-}
-
-func NewFloat64Rectangle(r image.Rectangle) (ret Float64Rectangle) {
-	ret.Min.X = float64(r.Min.X)
-	ret.Min.Y = float64(r.Min.Y)
-	ret.Max.X = float64(r.Max.X)
-	ret.Max.Y = float64(r.Max.Y)
-	return ret
-}
-
 func max(a, b int) int {
 	if a > b { return a }
 	return b
-}
-
-func Midpoint(a, b Float64Point) (mid Float64Point) {
-	mid = a
-	mid.X += b.X
-	mid.X /= 2.0
-	mid.Y += b.Y
-	mid.Y /= 2.0
-	return mid
 }
 
 func WeightedChoice(weights []float64) int {
@@ -116,12 +36,6 @@ func WeightedChoice(weights []float64) int {
 	}
 	fmt.Printf("[wtf] s = %.2f, cutoff = %.2f, weights = %s\n", s, cutoff, weights)
 	return -1
-}
-
-func RandomPointBetween(lo, hi Float64Point) Float64Point {
-	x := float64(hi.X) - rand.Float64() * float64(hi.X - lo.X)
-	y := float64(hi.Y) - rand.Float64() * float64(hi.Y - lo.Y)
-	return Float64Point{x, y}
 }
 
 func DarknessAt(img image.Image, x, y int) float64 {
